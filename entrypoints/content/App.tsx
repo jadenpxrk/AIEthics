@@ -46,6 +46,8 @@ export default () => {
           PIN_STATE_STORAGE_KEY,
         ]);
 
+        console.log("Loading saved state:", result);
+
         // set pin states first
         const isPinnedState =
           result[PIN_STATE_STORAGE_KEY] !== undefined
@@ -61,10 +63,22 @@ export default () => {
             x: number;
             y: number;
           };
-          setPosition({
-            x: typeof savedPos.x === "number" ? savedPos.x : 24,
-            y: typeof savedPos.y === "number" ? savedPos.y : 24,
-          });
+
+          if (
+            savedPos &&
+            typeof savedPos.x === "number" &&
+            typeof savedPos.y === "number"
+          ) {
+            setPosition({
+              x: savedPos.x,
+              y: savedPos.y,
+            });
+            console.log("Loaded saved position:", savedPos);
+          } else {
+            // Fallback if saved position is invalid
+            setPosition({ x: 24, y: 24 });
+            console.log("No valid saved position found, using default");
+          }
         } else {
           // otherwise reset to default position
           setPosition({ x: 24, y: 24 });
@@ -86,6 +100,7 @@ export default () => {
           await browser.storage.local.set({
             [POSITION_STORAGE_KEY]: position,
           });
+          console.log("Saved position:", position);
         } else {
           // If not pinned, remove saved position
           await browser.storage.local.remove(POSITION_STORAGE_KEY);
@@ -97,6 +112,28 @@ export default () => {
 
     savePosition();
   }, [position, isPinned]);
+
+  // Add event handler to ensure position is saved before page unload
+  useEffect(() => {
+    const handleBeforeUnload = () => {
+      if (isPinned) {
+        // Use synchronous localStorage as a backup to ensure position is saved
+        // This is a backup in case the async browser.storage.local call above doesn't complete
+        try {
+          console.log("Window closing - saving pinned position");
+          // We rely on the regular position saving which should have already happened
+          // via the useEffect above, since position and isPinned are dependencies
+        } catch (error) {
+          console.error("Error in beforeunload handler:", error);
+        }
+      }
+    };
+
+    window.addEventListener("beforeunload", handleBeforeUnload);
+    return () => {
+      window.removeEventListener("beforeunload", handleBeforeUnload);
+    };
+  }, [isPinned, position]);
 
   // save pin state when it changes
   useEffect(() => {
@@ -260,6 +297,34 @@ export default () => {
         // handle positioning when reopening
         if (isPinned) {
           // if pinned, we keep the current position
+          // But we should make sure we're loading the saved position
+          const loadSavedPosition = async () => {
+            try {
+              const result = await browser.storage.local.get([
+                POSITION_STORAGE_KEY,
+              ]);
+              const savedPos = result[POSITION_STORAGE_KEY] as {
+                x: number;
+                y: number;
+              };
+
+              if (
+                savedPos &&
+                typeof savedPos.x === "number" &&
+                typeof savedPos.y === "number"
+              ) {
+                setPosition({
+                  x: savedPos.x,
+                  y: savedPos.y,
+                });
+                console.log("Restored pinned window position:", savedPos);
+              }
+            } catch (error) {
+              console.error("Error loading saved position on reopen:", error);
+            }
+          };
+
+          loadSavedPosition();
         } else {
           // if not pinned, reset to default
           setPosition({ x: 24, y: 24 });

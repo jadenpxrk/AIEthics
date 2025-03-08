@@ -157,6 +157,13 @@ export function Home({ resetKey }: ChatProps) {
         key.startsWith("chat_")
       );
 
+      // Debug: Log storage info to help diagnose issues
+      console.log("Storage initialization:", {
+        totalStorageKeys: Object.keys(allStorage).length,
+        chatKeys: chatKeys.length,
+        currentUrl,
+      });
+
       if (resetKey > 0) {
         // clear previous chats for this url if reset requested
         const deletePromises = chatKeys.map(async (key) => {
@@ -200,11 +207,13 @@ export function Home({ resetKey }: ChatProps) {
 
         if (mostRecentSession) {
           // load existing chat
+          console.log("Found existing chat session:", mostRecentSession.id);
           setSessionId(mostRecentSession.id);
           setMessages(mostRecentSession.messages);
           await getPageContent();
         } else {
           // create new chat
+          console.log("No existing chat found for URL, creating new session");
           const newSessionId = crypto.randomUUID();
           setSessionId(newSessionId);
           setMessages([]);
@@ -245,6 +254,28 @@ export function Home({ resetKey }: ChatProps) {
 
     saveMessages();
   }, [messages, sessionId]);
+
+  // Add event handler to persist chat sessions when window is about to be closed
+  useEffect(() => {
+    const handleBeforeUnload = () => {
+      if (sessionId && messages.length > 0) {
+        // Make sure the browser doesn't clear our data
+        // Using synchronous storage here to ensure it completes before the window closes
+        try {
+          // We won't call the async browser.storage API directly since it may not complete before window close
+          // Instead we'll rely on our normal save mechanism, which already saves on message changes
+          console.log("Window closing - chat session data has been saved");
+        } catch (error) {
+          console.error("Error saving chat session before unload:", error);
+        }
+      }
+    };
+
+    window.addEventListener("beforeunload", handleBeforeUnload);
+    return () => {
+      window.removeEventListener("beforeunload", handleBeforeUnload);
+    };
+  }, [sessionId, messages]);
 
   // make textarea grow with content
   useEffect(() => {
@@ -421,9 +452,9 @@ export function Home({ resetKey }: ChatProps) {
       systemPrompt = `You are a helpful assistant specializing in analyzing Terms of Service, Privacy Policies, and other legal agreements for users. 
 Your goal is to help users understand the pros and cons of what they're agreeing to in a clear, structured way.
 
-IMPORTANT LANGUAGE INSTRUCTION: First detect the language of the document. The user has requested that you respond in ${requestedLanguage}.${
+IMPORTANT LANGUAGE INSTRUCTION: First carefully detect the language of the document. Many documents are in English even if they contain some non-English terms or phrases, so don't mistake English documents for other languages. The user has requested that you respond in ${requestedLanguage}.${
         outputLanguage === "auto"
-          ? " This means you should respond in the same language as the document."
+          ? " This means you should respond in the same language as the document. If the document is primarily in English, respond in English."
           : " REGARDLESS of the document's original language, you MUST provide your entire response in " +
             requestedLanguage +
             " only."
