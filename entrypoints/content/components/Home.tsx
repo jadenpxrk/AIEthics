@@ -612,7 +612,7 @@ If there is nothing about the page that appears to be a Terms of Service or rela
             ref={textareaRef}
             placeholder={
               apiKey
-                ? `Ask a question or press Enter for pros/cons in ${
+                ? `Ask a question about the TOS to receive PROS and CONS in ${
                     outputLanguage === "auto"
                       ? "the document's language"
                       : LANGUAGE_NAMES[outputLanguage]
